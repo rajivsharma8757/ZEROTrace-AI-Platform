@@ -1,17 +1,65 @@
-import { Activity, CheckCircle2, FileCheck2, HardDrive, Leaf, PlayCircle, ShieldAlert, type LucideIcon } from "lucide-react";
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { PageHeader, StatusBadge } from "@/components/shared";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useAppData } from "@/hooks/use-app-data";
-import type { DeviceStatus } from "@/lib/models";
-const chartColors: Record<string, string> = { REGISTERED: "bg-slate-500", WIPE_PENDING: "bg-amber-400", WIPING: "bg-cyan-400", VERIFICATION_PENDING: "bg-sky-400", VERIFIED: "bg-blue-400", CERTIFIED: "bg-emerald-400", READY_FOR_RECYCLING: "bg-violet-400", FAILED: "bg-rose-400" };
-function Metric({ icon: Icon, label, value, tone = "text-cyan-300" }: { icon: LucideIcon; label: string; value: number; tone?: string }) { return <Card className="border-slate-800 bg-slate-900/60"><CardContent className="flex items-center gap-4 p-5"><div className={`rounded-lg bg-slate-800 p-3 ${tone}`}><Icon size={21}/></div><div><p className="text-2xl font-bold">{value}</p><p className="text-xs text-slate-400">{label}</p></div></CardContent></Card>; }
-export default function Dashboard() { const { data } = useAppData(); const { user } = useAuth(); if (!user) return null; const scoped = user.role === "CUSTOMER" ? data.devices.filter(d => d.ownerId === user.id) : user.role === "EMPLOYEE" ? data.devices.filter(d => d.assignedToId === user.id) : data.devices; const wipes = user.role === "EMPLOYEE" ? data.wipeJobs.filter(w => w.operatorId === user.id) : data.wipeJobs; const verified = scoped.filter(d => ["VERIFIED", "CERTIFIED", "READY_FOR_RECYCLING", "RECYCLED"].includes(d.status)); const certs = data.certificates.filter(c => scoped.some(d => d.id === c.deviceId)); const statuses = Object.entries(scoped.reduce((a, d) => ({ ...a, [d.status]: (a[d.status] ?? 0) + 1 }), {} as Record<DeviceStatus, number>));
- const title = user.role === "ADMIN" ? "Executive overview" : user.role === "EMPLOYEE" ? "Operator command center" : "My device workspace";
- return <><PageHeader title={title} description={user.role === "ADMIN" ? "Monitor sanitization operations, certificate issuance and recovery readiness." : user.role === "EMPLOYEE" ? "Your assigned devices and simulated wipe workload." : "Track your assets, evidence and issued certificates."} action={<Button asChild className="bg-cyan-400 text-slate-950 hover:bg-cyan-300"><Link to={user.role === "CUSTOMER" ? "/devices" : "/wipe-jobs"}>{user.role === "CUSTOMER" ? "View my devices" : "Open wipe jobs"}</Link></Button>}/>
- <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{user.role === "ADMIN" ? <><Metric icon={HardDrive} label="Total devices" value={data.devices.length}/><Metric icon={Activity} label="Active wipe jobs" value={data.wipeJobs.filter(w => !["COMPLETED", "FAILED", "PENDING"].includes(w.status)).length}/><Metric icon={CheckCircle2} label="Verified devices" value={verified.length} tone="text-blue-300"/><Metric icon={FileCheck2} label="Certificates issued" value={data.certificates.length} tone="text-emerald-300"/><Metric icon={Leaf} label="Ready for recycling" value={data.devices.filter(d => d.status === "READY_FOR_RECYCLING").length} tone="text-violet-300"/><Metric icon={ShieldAlert} label="Failed jobs" value={data.wipeJobs.filter(w => w.status === "FAILED").length} tone="text-rose-300"/></> : user.role === "EMPLOYEE" ? <><Metric icon={HardDrive} label="Assigned devices" value={scoped.length}/><Metric icon={ShieldAlert} label="Pending wipes" value={wipes.filter(w => w.status === "PENDING").length} tone="text-amber-300"/><Metric icon={Activity} label="Active wipes" value={wipes.filter(w => !["PENDING", "COMPLETED", "FAILED"].includes(w.status)).length}/><Metric icon={CheckCircle2} label="Verification queue" value={data.verifications.filter(v => v.result === "PENDING").length} tone="text-blue-300"/></> : <><Metric icon={HardDrive} label="My devices" value={scoped.length}/><Metric icon={Activity} label="Active processing" value={scoped.filter(d => ["WIPING", "WIPE_PENDING"].includes(d.status)).length}/><Metric icon={FileCheck2} label="My certificates" value={certs.length} tone="text-emerald-300"/><Metric icon={CheckCircle2} label="Verified devices" value={verified.length} tone="text-blue-300"/></>}</div>
- <div className="mt-6 grid gap-6 xl:grid-cols-5"><Card className="border-slate-800 bg-slate-900/60 xl:col-span-3"><CardContent className="p-6"><h2 className="font-semibold">Device status distribution</h2><p className="mt-1 text-sm text-slate-400">Current lifecycle position of accessible assets.</p><div className="mt-7 space-y-4">{statuses.map(([status, count]) => <div key={status}><div className="mb-1 flex justify-between text-sm"><span>{status.replaceAll("_", " ")}</span><span className="text-slate-400">{count}</span></div><div className="h-2 overflow-hidden rounded-full bg-slate-800"><div className={`h-full rounded-full ${chartColors[status] ?? "bg-slate-500"}`} style={{ width: `${(count / Math.max(scoped.length, 1)) * 100}%` }}/></div></div>)}</div></CardContent></Card><Card className="border-slate-800 bg-slate-900/60 xl:col-span-2"><CardContent className="p-6"><h2 className="font-semibold">Quick actions</h2><div className="mt-5 space-y-3">{user.role !== "CUSTOMER" && <Button asChild className="w-full justify-start bg-cyan-400 text-slate-950 hover:bg-cyan-300"><Link to="/devices"><HardDrive/>Register device</Link></Button>}{user.role !== "CUSTOMER" && <Button asChild variant="outline" className="w-full justify-start border-slate-700 bg-transparent"><Link to="/wipe-jobs"><PlayCircle/>Manage demo wipes</Link></Button>}<Button asChild variant="outline" className="w-full justify-start border-slate-700 bg-transparent"><Link to="/certificates"><FileCheck2/>View certificates</Link></Button></div></CardContent></Card></div>
- <Card className="mt-6 border-slate-800 bg-slate-900/60"><CardContent className="p-6"><h2 className="font-semibold">Recent activity</h2><div className="mt-4 divide-y divide-slate-800">{data.auditEvents.slice(-5).reverse().map(e => <div className="flex gap-3 py-3 text-sm" key={e.id}><Activity size={16} className="mt-0.5 text-cyan-300"/><div><p>{e.action.replaceAll("_", " ")} <span className="text-slate-400">— {e.details}</span></p><p className="mt-1 text-xs text-slate-500">{new Date(e.timestamp).toLocaleString()}</p></div></div>)}{data.auditEvents.length === 0 && <p className="py-5 text-sm text-slate-400">Actions taken in this demo will appear here.</p>}</div></CardContent></Card></>;
+import { api } from "@/lib/api";
+import { OwnerDashboard } from "@/components/dashboards/OwnerDashboard";
+import { AdminDashboard } from "@/components/dashboards/AdminDashboard";
+import { AuditorDashboard } from "@/components/dashboards/AuditorDashboard";
+import { TechnicianDashboard } from "@/components/dashboards/TechnicianDashboard";
+import { CustomerDashboard } from "@/components/dashboards/CustomerDashboard";
+
+export default function Dashboard() {
+  const { data, refresh } = useAppData();
+  const { user } = useAuth();
+  const [stats, setStats] = useState<any>(null);
+  const [charts, setCharts] = useState<any>(null);
+
+  useEffect(() => {
+    async function fetchStats() {
+      try {
+        const [sRes, cRes] = await Promise.allSettled([
+          api.dashboard.getStats(),
+          api.dashboard.getCharts(),
+        ]);
+        if (sRes.status === "fulfilled" && sRes.value.success) {
+          setStats(sRes.value.data);
+        }
+        if (cRes.status === "fulfilled" && cRes.value.success) {
+          setCharts(cRes.value.data);
+        }
+      } catch (err) {
+        console.warn("Failed to fetch dashboard stats from API:", err);
+      }
+    }
+    fetchStats();
+  }, [data]);
+
+  if (!user) return null;
+
+  const role = user.role?.toUpperCase() || "USER";
+  const userEmail = (user.email || "").toLowerCase();
+
+  const isOwner = role === "OWNER" || userEmail === "rajivkumarsharma200@gmail.com";
+  const isAdmin = role === "ADMIN" || role === "ADMINISTRATOR";
+  const isAuditor = role === "AUDITOR";
+  const isTechnician = role === "OPERATOR" || role === "TECHNICIAN" || role === "EMPLOYEE";
+
+  if (isOwner) {
+    return <OwnerDashboard data={data} stats={stats} user={user} onRefresh={refresh} />;
+  }
+
+  if (isAdmin) {
+    return <AdminDashboard data={data} stats={stats} user={user} onRefresh={refresh} />;
+  }
+
+  if (isAuditor) {
+    return <AuditorDashboard data={data} stats={stats} user={user} onRefresh={refresh} />;
+  }
+
+  if (isTechnician) {
+    return <TechnicianDashboard data={data} stats={stats} user={user} onRefresh={refresh} />;
+  }
+
+  // Default to Customer / User view
+  return <CustomerDashboard data={data} stats={stats} user={user} onRefresh={refresh} />;
 }

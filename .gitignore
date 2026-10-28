@@ -11,6 +11,12 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+backend/node_modules/
+backend/dist/
+backend/data/
+data/
+*.local
+*.log
 
 # Environment and secrets
 .env

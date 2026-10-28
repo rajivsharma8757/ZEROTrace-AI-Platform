@@ -1,0 +1,280 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  OWNER
+  ADMINISTRATOR
+  ADMIN
+  CREATOR
+  AUTHOR
+  TECHNICIAN
+  OPERATOR
+  AUDITOR
+  CUSTOMER
+  USER
+}
+
+enum AssetStatus {
+  REGISTERED
+  ASSESSMENT
+  WIPE_SCHEDULED
+  WIPING
+  VERIFICATION
+  CERTIFIED
+  RECYCLING_APPROVED
+  RECYCLED
+  FAILED
+}
+
+enum WipeStatus {
+  PENDING
+  INITIALIZING
+  DETECTING_STORAGE
+  PREPARING_SANITIZATION
+  SANITIZING
+  FINALIZING
+  VERIFICATION_PREPARATION
+  COMPLETED
+  FAILED
+}
+
+enum VerificationStatus {
+  PASSED
+  FAILED
+  PENDING
+}
+
+enum CertificateStatus {
+  VALID
+  REVOKED
+}
+
+enum NotificationType {
+  SUCCESS
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  address   String?
+  contact   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     User[]
+  assets    Asset[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String        @id @default(uuid())
+  fullName       String
+  email          String        @unique
+  passwordHash   String
+  role           Role          @default(USER)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  department     String?
+  status         String        @default("ACTIVE") // ACTIVE, DISABLED, PENDING_VERIFICATION
+  emailVerified  Boolean       @default(false)
+  googleId       String?       @unique
+  avatarUrl      String?
+  lastLogin      DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  ownedAssets        Asset[]              @relation("CustomerAssets")
+  assignedWipeJobs   WipeJob[]            @relation("OperatorJobs")
+  issuedCertificates Certificate[]        @relation("OperatorCertificates")
+  auditLogs          AuditLog[]
+  notifications      Notification[]
+  recyclingApprovals RecyclingApproval[]  @relation("UserApprovals")
+  sentInvitations    Invitation[]         @relation("SentInvitations")
+  passwordResetTokens PasswordResetToken[]
+  emailVerifyTokens   EmailVerificationToken[]
+
+  @@map("users")
+}
+
+model Invitation {
+  id             String    @id @default(uuid())
+  email          String
+  role           Role      @default(USER)
+  department     String?
+  organizationId String?
+  invitedById    String
+  invitedBy      User      @relation("SentInvitations", fields: [invitedById], references: [id], onDelete: Cascade)
+  token          String    @unique
+  status         String    @default("PENDING") // PENDING, ACCEPTED, REVOKED, EXPIRED
+  expiresAt      DateTime
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@map("invitations")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("password_reset_tokens")
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("email_verification_tokens")
+}
+
+model Asset {
+  id               String        @id @default(uuid())
+  assetId          String        @unique
+  customerId       String
+  customer         User          @relation("CustomerAssets", fields: [customerId], references: [id], onDelete: Cascade)
+  organizationId   String?
+  organization     Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  deviceType       String
+  manufacturer     String
+  model            String
+  serialNumber     String        @unique
+  storageType      String        // NVMe, SSD, HDD
+  storageCapacity  Int           // GB
+  operatingSystem  String
+  encryptionStatus String        // Enabled, Disabled
+  deviceHealth     String        // Excellent, Good, Attention
+  owner            String
+  department       String
+  location         String
+  condition        String
+  status           AssetStatus   @default(REGISTERED)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  wipeJobs            WipeJob[]
+  verificationResults VerificationResult[]
+  certificate         Certificate?
+  recyclingApproval   RecyclingApproval?
+  auditLogs           AuditLog[]
+
+  @@map("assets")
+}
+
+model WipeJob {
+  id          String     @id @default(uuid())
+  jobId       String     @unique
+  assetId     String
+  asset       Asset      @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  operatorId  String
+  operator    User       @relation("OperatorJobs", fields: [operatorId], references: [id], onDelete: Cascade)
+  wipeMethod  String
+  status      WipeStatus @default(PENDING)
+  progress    Int        @default(0)
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime   @default(now())
+
+  verificationResults VerificationResult[]
+
+  @@map("wipe_jobs")
+}
+
+model VerificationResult {
+  id                 String             @id @default(uuid())
+  verificationId     String             @unique
+  wipeJobId          String
+  wipeJob            WipeJob            @relation(fields: [wipeJobId], references: [id], onDelete: Cascade)
+  assetId            String
+  asset              Asset              @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  method             String
+  blocksChecked      Int
+  residualDataResult String
+  confidenceScore    Int
+  status             VerificationStatus @default(PENDING)
+  verifiedAt         DateTime?
+
+  certificate        Certificate?
+
+  @@map("verification_results")
+}
+
+model Certificate {
+  id                 String            @id @default(uuid())
+  certificateId      String            @unique
+  assetId            String            @unique
+  asset              Asset             @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  verificationId     String            @unique
+  verification       VerificationResult @relation(fields: [verificationId], references: [id], onDelete: Cascade)
+  wipeMethod         String
+  verificationMethod String
+  operatorId         String
+  operator           User              @relation("OperatorCertificates", fields: [operatorId], references: [id], onDelete: Cascade)
+  certificateHash    String            // SHA-256
+  verificationCode   String
+  qrData             String            // Public verification URL
+  status             CertificateStatus @default(VALID)
+  issuedAt           DateTime          @default(now())
+
+  @@map("certificates")
+}
+
+model AuditLog {
+  id           String    @id @default(uuid())
+  userId       String?
+  user         User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action       String
+  assetId      String?
+  asset        Asset?    @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  jobId        String?
+  timestamp    DateTime  @default(now())
+  eventHash    String    // SHA-256
+  previousHash String
+  status       String    @default("VERIFIED")
+
+  @@map("audit_logs")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      NotificationType @default(INFO)
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@map("notifications")
+}
+
+model RecyclingApproval {
+  id         String   @id @default(uuid())
+  assetId    String   @unique
+  asset      Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  approvedBy String
+  approver   User     @relation("UserApprovals", fields: [approvedBy], references: [id], onDelete: Cascade)
+  status     String   @default("APPROVED") // APPROVED, REJECTED, PENDING
+  reason     String
+  approvedAt DateTime @default(now())
+
+  @@map("recycling_approvals")
+}
