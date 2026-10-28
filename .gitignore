@@ -7,9 +7,15 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Build outputs and dependencies
 node_modules
 dist
 dist-ssr
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
 *.local
 
 # Editor directories and files
@@ -23,9 +29,12 @@ dist-ssr
 *.sln
 *.sw?
 
-# Playwright test artifacts
+# Testing and coverage artifacts
 /test-results/
 /playwright-report/
 /playwright/.cache/
+/coverage
 .last-run.json
+
+# Tooling and platform state
 .dyad/
