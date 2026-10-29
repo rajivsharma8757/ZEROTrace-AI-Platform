@@ -437,15 +437,16 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
     const outbox = emailService.getOutbox();
     const outboxMatch = outbox.find((o) => o.token === token && o.type === "PASSWORD_RESET");
     if (outboxMatch) {
+      if (outboxMatch.used) {
+        res.status(400).json({ success: false, message: "This password reset token has already been used." });
+        return;
+      }
       const u = dbStore.getUsers().find((usr) => usr.email.toLowerCase() === outboxMatch.to.toLowerCase());
-      if (u) matchedUserId = u.id;
+      if (u) {
+        matchedUserId = u.id;
+        emailService.markTokenUsed(token);
+      }
     }
-  }
-
-  // 3. Fallback: if email provided and matched
-  if (!matchedUserId && email) {
-    const u = dbStore.getUsers().find((usr) => usr.email.toLowerCase() === email.toLowerCase().trim());
-    if (u) matchedUserId = u.id;
   }
 
   if (!matchedUserId) {

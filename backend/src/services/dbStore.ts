@@ -4,8 +4,20 @@ import bcrypt from "bcryptjs";
 import { prisma, checkDbConnection } from "../utils/prisma.js";
 import { generateEventHash, generateCertificateHash } from "../utils/hash.js";
 
-const DATA_DIR = path.resolve(process.cwd(), "data");
-const DB_FILE = path.join(DATA_DIR, "zerotrace_store.json");
+function resolveDbFilePath(): string {
+  const candidates = [
+    path.resolve(process.cwd(), "data", "zerotrace_store.json"),
+    path.resolve(process.cwd(), "backend", "data", "zerotrace_store.json"),
+    path.resolve(process.cwd(), "..", "data", "zerotrace_store.json"),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return candidates[0];
+}
+
+const DB_FILE = resolveDbFilePath();
+const DATA_DIR = path.dirname(DB_FILE);
 
 export interface DbState {
   organizations: any[];

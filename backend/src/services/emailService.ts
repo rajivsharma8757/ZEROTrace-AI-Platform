@@ -2,7 +2,19 @@ import nodemailer, { type Transporter } from "nodemailer";
 import fs from "fs";
 import path from "path";
 
-const DATA_DIR = path.resolve(process.cwd(), "data");
+function resolveDataDir(): string {
+  const candidates = [
+    path.resolve(process.cwd(), "data"),
+    path.resolve(process.cwd(), "backend", "data"),
+    path.resolve(process.cwd(), "..", "data"),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return candidates[0];
+}
+
+const DATA_DIR = resolveDataDir();
 const OUTBOX_FILE = path.join(DATA_DIR, "email_outbox.json");
 
 export interface OutgoingEmailRecord {
@@ -14,6 +26,7 @@ export interface OutgoingEmailRecord {
   type: "PASSWORD_RESET" | "EMAIL_VERIFICATION" | "TEAM_INVITATION";
   deliveredViaSmtp: boolean;
   sentAt: string;
+  used?: boolean;
 }
 
 class EmailService {
@@ -53,16 +66,27 @@ class EmailService {
 
   private recordToOutbox(record: OutgoingEmailRecord) {
     try {
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
+      const pathsToUpdate = [
+        path.resolve(process.cwd(), "data", "email_outbox.json"),
+        path.resolve(process.cwd(), "backend", "data", "email_outbox.json"),
+        path.resolve(process.cwd(), "..", "data", "email_outbox.json"),
+      ];
+      for (const p of pathsToUpdate) {
+        try {
+          const dir = path.dirname(p);
+          if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+          }
+          let records: OutgoingEmailRecord[] = [];
+          if (fs.existsSync(p)) {
+            try {
+              records = JSON.parse(fs.readFileSync(p, "utf-8"));
+            } catch {}
+          }
+          records.unshift(record);
+          fs.writeFileSync(p, JSON.stringify(records.slice(0, 100), null, 2), "utf-8");
+        } catch {}
       }
-      let records: OutgoingEmailRecord[] = [];
-      if (fs.existsSync(OUTBOX_FILE)) {
-        records = JSON.parse(fs.readFileSync(OUTBOX_FILE, "utf-8"));
-      }
-      records.unshift(record);
-      // Keep last 100 emails in outbox
-      fs.writeFileSync(OUTBOX_FILE, JSON.stringify(records.slice(0, 100), null, 2), "utf-8");
     } catch (err) {
       console.warn("Failed to record email to outbox file:", err);
     }
@@ -75,6 +99,30 @@ class EmailService {
       }
     } catch {}
     return [];
+  }
+
+  public markTokenUsed(token: string): boolean {
+    const pathsToUpdate = [
+      path.resolve(process.cwd(), "data", "email_outbox.json"),
+      path.resolve(process.cwd(), "backend", "data", "email_outbox.json"),
+      path.resolve(process.cwd(), "..", "data", "email_outbox.json"),
+    ];
+    let found = false;
+    for (const p of pathsToUpdate) {
+      try {
+        if (fs.existsSync(p)) {
+          const records: OutgoingEmailRecord[] = JSON.parse(fs.readFileSync(p, "utf-8"));
+          for (const rec of records) {
+            if (rec.token === token) {
+              rec.used = true;
+              found = true;
+            }
+          }
+          fs.writeFileSync(p, JSON.stringify(records, null, 2), "utf-8");
+        }
+      } catch {}
+    }
+    return found;
   }
 
   public async sendPasswordResetEmail(email: string, token: string): Promise<{ success: boolean; delivered: boolean; error?: string }> {
