@@ -28,14 +28,17 @@ ENV NODE_ENV=production
 ENV PORT=5000
 
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 COPY prisma ./prisma/
 RUN npx prisma generate
 
 COPY --from=builder /app/dist ./dist
-COPY data ./data/
+
+# Create runtime storage directory
+RUN mkdir -p ./data
 
 EXPOSE 5000
 
-CMD ["node", "dist/server.js"]
+# When DATABASE_URL is provided, apply pending database migrations automatically before server boot
+CMD ["sh", "-c", "if [ -n \"$DATABASE_URL\" ]; then npx prisma migrate deploy; fi && node dist/server.js"]

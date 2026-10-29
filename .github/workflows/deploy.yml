@@ -37,6 +37,7 @@ jobs:
       - name: Build Platform Frontend for GitHub Pages
         env:
           GITHUB_PAGES: "true"
+          VITE_API_URL: ${{ secrets.VITE_API_URL || vars.VITE_API_URL || 'https://zerotrace-ai-backend.onrender.com/api' }}
         run: |
           pnpm run build
           cp dist/index.html dist/404.html

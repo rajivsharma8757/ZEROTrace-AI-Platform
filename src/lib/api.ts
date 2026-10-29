@@ -1,6 +1,8 @@
 // ZEROTrace AI - Centralized Full-Stack API Client
 
-const API_BASE = (import.meta.env.VITE_API_URL as string) || "http://localhost:5000/api";
+const rawApiUrl = (import.meta.env.VITE_API_URL as string) || "http://localhost:5000/api";
+const cleanBase = rawApiUrl.replace(/\/+$/, "");
+const API_BASE = cleanBase.endsWith("/api") ? cleanBase : `${cleanBase}/api`;
 
 function getToken(): string | null {
   return localStorage.getItem("zerotrace_jwt_token");

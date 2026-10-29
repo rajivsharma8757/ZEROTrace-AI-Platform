@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 5000;
 async function bootstrap() {
   await dbStore.init();
 
-  app.listen(PORT, () => {
+  app.listen(Number(PORT), "0.0.0.0", () => {
     console.log(`====================================================`);
     console.log(`  ZEROTrace AI - Enterprise Backend REST Server     `);
     console.log(`  Secure • Verify • Prove • Recycle                `);

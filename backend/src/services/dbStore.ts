@@ -52,10 +52,23 @@ class DatabaseStore {
   }
 
   public async init() {
+    const isProduction = process.env.NODE_ENV === "production";
+    const requirePostgres = isProduction || process.env.REQUIRE_POSTGRES === "true";
+    const hasDatabaseUrl = Boolean(
+      process.env.DATABASE_URL &&
+      process.env.DATABASE_URL.trim() !== ""
+    );
+
     this.isPostgresAvailable = await checkDbConnection();
     if (this.isPostgresAvailable) {
       console.log("Connected to PostgreSQL via Prisma successfully.");
       await this.syncAndSeedPostgres();
+    } else if (requirePostgres && process.env.ALLOW_LOCAL_STORAGE !== "true") {
+      const errMessage = hasDatabaseUrl
+        ? "CRITICAL: DATABASE_URL is configured but connection to PostgreSQL failed. Production startup aborted to prevent silent fallback to ephemeral storage."
+        : "CRITICAL: Running in production mode without a reachable PostgreSQL database. PostgreSQL is required in production. Set a valid DATABASE_URL or set ALLOW_LOCAL_STORAGE=true to override.";
+      console.error(errMessage);
+      throw new Error(errMessage);
     } else {
       console.warn("PostgreSQL not responding at DATABASE_URL. Running in resilient local database mode.");
       this.ensureSeedData();
