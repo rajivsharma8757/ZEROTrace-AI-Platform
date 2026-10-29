@@ -28,9 +28,9 @@ ENV NODE_ENV=production
 ENV PORT=5000
 
 COPY package*.json ./
-RUN npm ci --omit=dev
-
 COPY prisma ./prisma/
+
+RUN npm ci --omit=dev
 RUN npx prisma generate
 
 COPY --from=builder /app/dist ./dist
