@@ -75,7 +75,7 @@ export default function App() {
         <Toaster />
         <Sonner />
         <AuthProvider>
-          <BrowserRouter>
+          <BrowserRouter basename={import.meta.env.BASE_URL}>
             <Routes>
               {/* Public Landing & Marketing */}
               <Route path="/" element={<LandingPage />} />
