@@ -1,0 +1,5 @@
+*.sql text eol=lf
+*.prisma text eol=lf
+*.json text eol=lf
+*.ts text eol=lf
+*.md text eol=lf
